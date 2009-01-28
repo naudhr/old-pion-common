@@ -43,7 +43,9 @@ if test "x$unordered_map_type" = "xtr1_unordered_map"; then
 	# test to make sure it's good enough
 	AC_MSG_CHECKING(if unordered_map is ok)
 	AC_TRY_LINK([#include <tr1/unordered_map>],[
-		#if !defined(__GNUC__) || (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1)
+		#if defined(__APPLE__)
+			#error completely broken on OSX, even for gcc 4.2
+		#elif !defined(__GNUC__) || (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1)
 			return(0);
 		#else
 			#error only use gcc versions 4.1 or greater
@@ -182,11 +184,15 @@ if test "x$enable_lockfree" == "xno"; then
 	AC_MSG_RESULT(disabled)
 else
 	AC_TRY_LINK([#include <boost/lockfree/tagged_ptr.hpp>],
-		[ boost::lockfree::tagged_ptr<int> ptr; return 0; ],
-		[ AC_MSG_RESULT(ok)
-		  AC_DEFINE([PION_HAVE_LOCKFREE],[1],[Define to 1 if you have the `boost.lockfree' library.])
-		],
-		[ AC_MSG_RESULT(no) ])
+		[ 
+		boost::lockfree::tagged_ptr<int> ptr_a(NULL);
+		boost::lockfree::tagged_ptr<int> ptr_b = ptr_a;
+		int * ptr_c = NULL;
+		ptr_a.CAS(ptr_b, ptr_c);
+		return 0;
+		],[ AC_MSG_RESULT(yes)
+			AC_DEFINE([PION_HAVE_LOCKFREE],[1],[Define to 1 if you have the `boost.lockfree' library.]) ],
+		  [ AC_MSG_RESULT(no) ])
 fi
 
 

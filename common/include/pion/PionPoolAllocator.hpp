@@ -21,7 +21,7 @@
 #include <pion/PionException.hpp>
 
 /// the following enables use of the lock-free cache
-#if defined(PION_HAVE_LOCKFREE) && !defined(_MSC_VER)
+#if defined(PION_HAVE_LOCKFREE)
 #ifdef _MSC_VER
 	#pragma warning(push)
 	#pragma warning(disable: 4800) // forcing value to bool 'true' or 'false' (performance warning)
@@ -76,19 +76,15 @@ public:
 			return ::malloc(n);
 		FixedSizeAlloc *pool_ptr = getPool(n);
 
-#if defined(PION_HAVE_LOCKFREE) && !defined(_MSC_VER)
+#if defined(PION_HAVE_LOCKFREE)
 		while (true) {
 			// get copy of free list pointer
 			FreeListPtr old_free_ptr(pool_ptr->m_free_ptr);
 			if (! old_free_ptr)
 				break;	// use pool alloc if free list is empty
-			
-			// prepare a new free list pointer
-			FreeListPtr new_free_ptr(old_free_ptr->next);
-			new_free_ptr.set_tag(old_free_ptr.get_tag() + 1);
-			
+
 			// use CAS operation to swap the free list pointer
-			if (pool_ptr->m_free_ptr.CAS(old_free_ptr, new_free_ptr))
+			if (pool_ptr->m_free_ptr.CAS(old_free_ptr, old_free_ptr->next.get_ptr()))
 				return reinterpret_cast<void*>(old_free_ptr.get_ptr());
 		}
 #endif
@@ -111,7 +107,7 @@ public:
 			return;
 		}
 		FixedSizeAlloc *pool_ptr = getPool(n);
-#if defined(PION_HAVE_LOCKFREE) && !defined(_MSC_VER)
+#if defined(PION_HAVE_LOCKFREE)
 		while (true) {
 			// get copy of free list pointer
 			FreeListPtr old_free_ptr(pool_ptr->m_free_ptr);
@@ -121,11 +117,8 @@ public:
 			FreeListNode *node_ptr = reinterpret_cast<FreeListNode*>(ptr);
 			node_ptr->next.set_ptr(old_free_ptr.get_ptr());
 			
-			// create a temporary new pointer for the CAS operation
-			FreeListPtr new_free_ptr(node_ptr, old_free_ptr.get_tag() + 1);
-
 			// use CAS operation to swap the free list pointer
-			if (pool_ptr->m_free_ptr.CAS(old_free_ptr, new_free_ptr))
+			if (pool_ptr->m_free_ptr.CAS(old_free_ptr, node_ptr))
 				break;
 		}
 #else
@@ -153,7 +146,7 @@ public:
 
 protected:
 
-#if defined(PION_HAVE_LOCKFREE) && !defined(_MSC_VER)
+#if defined(PION_HAVE_LOCKFREE)
 	/// data structure used to represent a free node
 	struct FreeListNode {
 		boost::lockfree::tagged_ptr<struct FreeListNode>	next;
@@ -171,7 +164,7 @@ protected:
 	///   c) MinSize >= sizeof(FreeNodePtr)  [usually 16]
 	BOOST_STATIC_ASSERT(MaxSize >= MinSize);
 	BOOST_STATIC_ASSERT(MaxSize % MinSize == 0);
-#if defined(PION_HAVE_LOCKFREE) && !defined(_MSC_VER)
+#if defined(PION_HAVE_LOCKFREE)
 	BOOST_STATIC_ASSERT(MinSize >= sizeof(FreeListNode));
 #endif
 	

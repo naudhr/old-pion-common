@@ -36,9 +36,27 @@ case "$build_os" in
 	# -pthread is implied (automatically set by compiler)
 	CPPFLAGS="$CPPFLAGS -D_REENTRANT"
 	#LDFLAGS="$LDFLAGS"
-	PION_OPT_FLAGS="-fast -Wall -Wno-strict-aliasing -DNDEBUG"
+	PION_OPT_FLAGS="-O3 -fomit-frame-pointer -fstrict-aliasing -momit-leaf-frame-pointer -fno-tree-pre -falign-loops -Wall -Wno-strict-aliasing -DNDEBUG"
 	PION_DEBUG_FLAGS="-ggdb -Wall -Wno-strict-aliasing -fkeep-inline-functions"
 	PION_EXTERNAL_LIBS="-ldl"
+
+	# Check for OSX binary architecture
+	AC_MSG_CHECKING([for OSX binary architectures])
+	AC_ARG_WITH([arch],
+	    AC_HELP_STRING([--with-arch@<:@=LIST@:>@],[specify comma-separated list of OSX architectures]),
+    	[with_arch=$withval],
+	    [with_arch=no])
+	if test "$with_arch" = "no"; then
+		AC_MSG_RESULT(no)
+	elif test "x$with_arch" = "x"; then
+		AC_MSG_RESULT(no)
+	else
+		AC_MSG_RESULT($with_arch)
+		with_arch="-arch `echo $with_arch | sed 's#,# -arch #g'`"
+		PION_OPT_FLAGS="$PION_OPT_FLAGS $with_arch"
+		PION_DEBUG_FLAGS="$PION_DEBUG_FLAGS $with_arch"
+	fi
+
 	;;
 *cygwin*)
 	# Cygwin GCC compiler (Windows)
@@ -64,6 +82,39 @@ case "$build_os" in
 	PION_EXTERNAL_LIBS="-ldl"
 	;;
 esac
+
+
+# Check for --with-cpu (gcc CPU architecture)
+AC_MSG_CHECKING([for specific CPU architecture])
+AC_ARG_WITH([cpu],
+	AC_HELP_STRING([--with-cpu@<:@=MARCH@:>@],[specify specific CPU architecture for gcc]),
+	[with_cpu=$withval],
+	[with_cpu=default])
+if test "$with_cpu" = "no"; then
+	AC_MSG_RESULT(no)
+else
+	if test "$with_cpu" = "default"; then
+		if test "$with_arch" = "no" || test "x$with_arch" = "x" ; then
+		if test "$ax_cv_cxx_compiler_vendor" = "gnu"; then
+			# check __x86_64__ to determine default
+			AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[
+			#if defined(__x86_64__)
+				// x86_64 defined -> leave undefined
+			#else
+				#error __x86_64__ not defined -> i686
+			#endif
+			]])], [], [with_cpu="i686"])
+		fi
+		fi
+	fi
+	if test "$with_cpu" = "default"; then
+		AC_MSG_RESULT(no)
+	else
+		AC_MSG_RESULT($with_cpu)
+		PION_OPT_FLAGS="$PION_OPT_FLAGS -march=$with_cpu"
+		PION_DEBUG_FLAGS="$PION_DEBUG_FLAGS -march=$with_cpu"
+	fi
+fi
 
 
 # Check for debug
